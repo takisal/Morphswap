@@ -29,7 +29,6 @@ import (
 	"github.com/btcsuite/btcd/btcutil"
 	secondCfg "github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/rpcclient"
-	"github.com/btcsuite/btcd/txscript"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
@@ -40,7 +39,6 @@ import (
 	"github.com/libsv/go-bk/bec"
 	"github.com/libsv/go-bk/bip32"
 	"github.com/libsv/go-bk/chaincfg"
-	"github.com/spf13/viper"
 	"github.com/tyler-smith/go-bip39"
 )
 
@@ -53,23 +51,23 @@ var mainPolygonClient *ethclient.Client
 var relativePrivKeyArray []*bec.PrivateKey
 var relativePubKeyArray []string
 var validNodesIP []string
-var ip_cNID map[string]uint8
+var ipToCNID map[string]uint8
 var receiveWalletPubKey []*bec.PublicKey
 var indexConverter map[string]uint8
 var localNodeID uint8
 var addressConverter map[string][]*bec.PublicKey
 var validMultiSigs map[uint]string
-var validMultiSigAddrs []btcutil.Address
+var validMultiSigAddresses []btcutil.Address
 var bitcoinRPC *rpcclient.Client
-var recPSBTs map[string][]bitcoindclient.SignRawTransactionWithKeyReqPrevTxs
+var receivedPSBTs map[string][]bitcoindclient.SignRawTransactionWithKeyReqPrevTxs
 var defaultPolygonAccount string
 var polygonAccountType common.Address
 var polygonBTCOverallContract *overallContractMask.OverallContractMask
 var preInteractionContract *preInteraction.PreInteraction
 var overallContractCentral *overallContractMask.OverallContractMask
 var postContract *postInteractionContract.PostInteractionContract
-var bitcoinTxFee uint
-var earlyRec map[string][]bitcoindclient.SignRawTransactionWithKeyReqPrevTxs
+var bitcoinTXFee uint
+var earlyReceipt map[string][]bitcoindclient.SignRawTransactionWithKeyReqPrevTxs
 var holdingTable map[string]string
 var alreadyProcessed map[string]bool
 var multiSigDepositAddress string
@@ -77,28 +75,28 @@ var multiSigDepositAddressUtil btcutil.Address
 var mySQLClient *sql.DB
 var recWalletPrivateKey *bec.PrivateKey
 var localPortNum uint
-var cNID_pubKeys map[uint][]string
+var cNIDToPublicKeys map[uint][]string
 var listenGL map[string]bool
 var openEndpoint bool
-var pubKeyConverter map[string]string
-var privKeyConverter map[string]*bec.PrivateKey
-var mneumonicStr string
+var publicKeyConverter map[string]string
+var privateKeyConverter map[string]*bec.PrivateKey
+var mneumonicString string
 var receiveWalletPubKeyString string
-var allRecWalletPubKeyStr []string
-var allRecWalletPubKeyBEC []*bec.PublicKey
-var pubKey1 string
-var pubKey2 string
-var pubKey3 string
+var receiveWalletPubKeyStringSlice []string
+var receiveWalletPubKeyBECSlice []*bec.PublicKey
+var publicKey1 string
+var publicKey2 string
+var publicKey3 string
 var privateKey1 *bec.PrivateKey
 var privateKey2 *bec.PrivateKey
 var privateKey3 *bec.PrivateKey
 var receiveWalletPubKeySingle *bec.PublicKey
-var extKey *bip32.ExtendedKey
+var extendedKey *bip32.ExtendedKey
 var polygonPrivKey *ecdsa.PrivateKey
 var redeemScriptCoverter map[string]string = make(map[string]string)
 var bc *bitcoindclient.BitcoindClient
-var SigNumber uint
-var SUBool bool
+var SignalNumber uint
+var performSetup bool
 var configValues setup.ConfigValues
 
 // hardened
@@ -106,137 +104,41 @@ var path string = "2147483648/0/0"
 
 type rPubKeys []*bec.PublicKey
 
-type psbtFullStruct struct {
-	Psbt        string                                               `json:"Psbt"`
-	Spk         uint                                                 `json:"Spk"`
-	Svvra       []bitcoindclient.SignRawTransactionWithKeyReqPrevTxs `json:"Svvra"`
+type PSBTFullStruct struct {
+	PSBT        string                                               `json:"PSBT"`
+	SPK         uint                                                 `json:"SPK"`
+	SVRA        []bitcoindclient.SignRawTransactionWithKeyReqPrevTxs `json:"SVRA"`
 	TxVirginHex string                                               `json:"TxVirginHex"`
 }
-type dataTransmiion struct {
-	Addrconv   map[string][]*bec.PublicKey `json:"Addrconv"`
-	PublicKeys []*bec.PublicKey            `json:"PublicKeys"`
+type DataTransmission struct {
+	AddressConverter map[string][]*bec.PublicKey `json:"AddressConverter"`
+	PublicKeys       []*bec.PublicKey            `json:"PublicKeys"`
 }
-type recvFullStruct struct {
+type ReceiptFullStruct struct {
 	PortTEST     uint     `json:"PortTEST"`
 	Pubykeyarray []string `json:"Pubykeyarray"`
 	Supplemental bool     `json:"Supplemental"`
 }
 
-type filettaRow struct {
-	col_name string
-	col_val  int
-}
-
-func (s rPubKeys) Len() int {
-	return len(s)
-}
-func (s rPubKeys) Swap(i, j int) {
-	s[i], s[j] = s[j], s[i]
-}
-func (s rPubKeys) Less(i, j int) bool {
-	//return strings.ToUpper(hex.EncodeToString((s[i].SerialiseCompressed()[:]))) < strings.ToUpper(hex.EncodeToString((s[j].SerialiseCompressed()[:])))
-	v := new(big.Int).SetBytes(s[i].SerialiseCompressed()[:])
-	d := new(big.Int).SetBytes(s[j].SerialiseCompressed()[:])
-	return (*v).Cmp(d) < 0
-}
-func getRedeemHashFromKeyArray(pkArr []*bec.PublicKey, nSigs uint, mSigs uint) []byte {
-
-	builder := txscript.NewScriptBuilder()
-	switch nSigs {
-	case 2:
-		builder.AddOp(txscript.OP_2)
-	case 3:
-		builder.AddOp(txscript.OP_3)
-	case 4:
-		builder.AddOp(txscript.OP_4)
-	case 5:
-		builder.AddOp(txscript.OP_5)
-	case 6:
-		builder.AddOp(txscript.OP_6)
-	case 7:
-		builder.AddOp(txscript.OP_7)
-	}
-
-	for k := 0; k < int(mSigs); k++ {
-		builder.AddData(pkArr[k].SerialiseCompressed())
-	}
-
-	switch mSigs {
-	case 2:
-		builder.AddOp(txscript.OP_2)
-	case 3:
-		builder.AddOp(txscript.OP_3)
-	case 4:
-		builder.AddOp(txscript.OP_4)
-	case 5:
-		builder.AddOp(txscript.OP_5)
-	case 6:
-		builder.AddOp(txscript.OP_6)
-	case 7:
-		builder.AddOp(txscript.OP_7)
-	}
-
-	builder.AddOp(txscript.OP_CHECKMULTISIG)
-
-	redeemScript, err := builder.Script()
-	if err != nil {
-		rVal, _ := hex.DecodeString("Error")
-		return rVal
-	}
-
-	redeemHash := btcutil.Hash160(redeemScript)
-	return redeemHash
-}
-
-func readConfig() {
-	viper.SetConfigName("config")
-	viper.AddConfigPath(".")
-	// Enable VIPER to read Environment Variables
-	viper.AutomaticEnv()
-	viper.SetConfigType("yml")
-	localPortNum = viper.GetUint("EXTERNAL_PORT")
-	if localPortNum == 0 {
-		fmt.Print("It looks like there is no config file. Would you like to set up the config file now (using the CLI)? (Y/N):")
-		reader := bufio.NewReader(os.Stdin)
-		// ReadString will block until the delimiter is entered
-		input, err := reader.ReadString('\n')
-		if err != nil {
-			fmt.Println("An error occured while reading input. Please try again", err)
-			panic("Invalid Entry")
-		}
-		// remove the delimeter from the string
-		input = strings.TrimSuffix(input, "\n")
-		if input != "y" && input != "Y" {
-			os.Exit(3)
-		}
-		//begin "set up wizard"
-		configValues = setup.SetupWalkthrough()
-		log.Println("Successfully wrote and saved new config file")
-	} else {
-		setup.ReadConfig()
-	}
-	path += fmt.Sprint(configValues.BTC_WALLET_ROOT)
-}
 func init() {
 
 	//initialize maps
-	cNID_pubKeys = make(map[uint][]string)
-	ip_cNID = make(map[string]uint8)
+	cNIDToPublicKeys = make(map[uint][]string)
+	ipToCNID = make(map[string]uint8)
 	indexConverter = make(map[string]uint8)
 	addressConverter = make(map[string][]*bec.PublicKey)
 	validMultiSigs = make(map[uint]string)
-	recPSBTs = make(map[string][]bitcoindclient.SignRawTransactionWithKeyReqPrevTxs)
-	earlyRec = make(map[string][]bitcoindclient.SignRawTransactionWithKeyReqPrevTxs)
+	receivedPSBTs = make(map[string][]bitcoindclient.SignRawTransactionWithKeyReqPrevTxs)
+	earlyReceipt = make(map[string][]bitcoindclient.SignRawTransactionWithKeyReqPrevTxs)
 	holdingTable = make(map[string]string)
 	alreadyProcessed = make(map[string]bool)
-	cNID_pubKeys = make(map[uint][]string)
+	cNIDToPublicKeys = make(map[uint][]string)
 	listenGL = make(map[string]bool)
-	pubKeyConverter = make(map[string]string)
-	privKeyConverter = make(map[string]*bec.PrivateKey)
-	SUBool = true
+	publicKeyConverter = make(map[string]string)
+	privateKeyConverter = make(map[string]*bec.PrivateKey)
+	performSetup = true
 	localNodeID = uint8(configValues.NODE_ID)
 	localPortNum = configValues.PORT
-	log.Println(localNodeID)
 	privateKey, err := crypto.HexToECDSA(configValues.PRIV_KEY)
 	if err != nil {
 		log.Fatal(err)
@@ -244,10 +146,10 @@ func init() {
 	polygonPrivKey = privateKey
 	//generate multiSigReceiver
 	personalRoot = configValues.BTC_WALLET_ROOT
-	mneumonicStr = configValues.BTC_MNEUMONIC
-	seed := bip39.NewSeed(mneumonicStr, "")
-	extKey, _ = bip32.NewMaster(seed, &chaincfg.MainNet)
-	child, _ := extKey.DeriveChildFromPath(path)
+	mneumonicString = configValues.BTC_MNEUMONIC
+	seed := bip39.NewSeed(mneumonicString, "")
+	extendedKey, _ = bip32.NewMaster(seed, &chaincfg.MainNet)
+	child, _ := extendedKey.DeriveChildFromPath(path)
 	privKey, _ := child.ECPrivKey()
 	recWalletPrivateKey = privKey
 	pubKey, _ := child.ECPubKey()
@@ -294,7 +196,7 @@ func main() {
 	// remove the delimeter from the string
 	input = strings.TrimSuffix(input, "\n")
 	if input == "y" {
-		SUBool = false
+		performSetup = false
 	}
 	fmt.Print("Import addresses? (y/n): ")
 	reader1 := bufio.NewReader(os.Stdin)
@@ -316,8 +218,8 @@ func main() {
 	log.Println("Current TX Count: ", currentTXCount, "Processed BTC Outbound Transactions: ", processedBTCOutbound)
 	//Doesn't import addresses on startup if the user doesnt want them
 	time.AfterFunc(6*time.Second, func() {
-		onStartup(SUBool, IAbool)
-		if SUBool == false {
+		onStartup(performSetup, IAbool)
+		if performSetup == false {
 			subscribeToPolygon()
 		}
 
@@ -342,136 +244,27 @@ func main() {
 
 }
 
-func connectToBitcoind() {
-	// Connect to local bitcoin core RPC server using HTTP POST mode.
-	connCfg := &rpcclient.ConnConfig{
-		Host:         configValues.BTCNODE_HOST,
-		User:         configValues.BTCNODE_USER,
-		Pass:         configValues.BTCNODE_PASS,
-		HTTPPostMode: true, // Bitcoin core only supports HTTP POST mode
-		DisableTLS:   true, // Bitcoin core does not provide TLS by default
-	}
-	// Notice the notification parameter is nil since notifications are
-	// not supported in HTTP POST mode.
-	client, err := rpcclient.New(connCfg, nil)
-	if err != nil {
-		log.Fatal(err)
-	}
-	bitcoinRPC = client
-
-	// Get the current block count.
-	blockCount, err := client.GetBlockCount()
-	if err != nil {
-		log.Fatal(err)
-	}
-	log.Printf("Bitcoin Block count: %d", blockCount)
-	bcScope, err := bitcoindclient.New(bitcoindclient.Config{
-		RpcAddress:  configValues.BTCNODE_HOST,
-		RpcUser:     configValues.BTCNODE_USER,
-		RpcPassword: configValues.BTCNODE_PASS,
-	})
-	bc = bcScope
-}
-
-func connectToPolygon() {
-	client, err := ethclient.Dial(configValues.HTTP_URL)
-	mainPolygonClient = client
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	gasPrice, errGas := client.SuggestGasPrice(context.Background())
-	if errGas != nil {
-		log.Fatal(errGas)
-	}
-	log.Println("Succesful connection. Gas price: ", gasPrice)
-	oBTCContract, err := overallContractMask.NewOverallContractMask(common.HexToAddress(configValues.CONTRACT_ADDR), mainPolygonClient)
-	if err != nil {
-		log.Fatal(err)
-	}
-	polygonBTCOverallContract = oBTCContract
-	oContract, err := overallContractMask.NewOverallContractMask(common.HexToAddress(configValues.CONTRACTBTC_ADDR), mainPolygonClient)
-	if err != nil {
-		log.Fatal(err)
-	}
-	overallContractCentral = oContract
-	postIntContract, err := postInteractionContract.NewPostInteractionContract(common.HexToAddress(configValues.CONTRACTPOST_ADDR), mainPolygonClient)
-	if err != nil {
-		log.Fatal(err)
-	}
-	postContract = postIntContract
-	//TODO have user enter this
-	polyAcctStr := configValues.ADDR
-	polygonAccountType = common.HexToAddress(polyAcctStr)
-
-	defaultPolygonAccount = polyAcctStr
-}
-
-func connectToMySQL() {
-	con, errC := sql.Open("mysql", configValues.DB_URI)
-	if errC != nil {
-		log.Fatal(errC)
-	}
-
-	rows, err := con.Query("select * from " + configValues.DB_NAME)
-	//error handling
-	if err != nil {
-		log.Println(err)
-	}
-	mySQLClient = con
-	var ida string
-	var idb uint
-	for rows.Next() {
-		err = rows.Scan(&ida, &idb)
-
-		//error handling
-		if err != nil {
-			log.Println(err)
-		}
-		if ida == "crtx" {
-			currentTXCount = idb
-
-		} else if ida == "pbtco" {
-			processedBTCOutbound = idb
-		} else if ida == "signum" {
-			SigNumber = idb
-		}
-	}
-
-}
-
-func fromStringToPubKey(passedStr string) *bec.PublicKey {
-	koblitzCurveA := bec.S256()
-	decodedBytes, _ := hex.DecodeString(passedStr)
-	pubKeyFinal, _ := bec.ParsePubKey(decodedBytes, koblitzCurveA)
-	return pubKeyFinal
-}
-func fromStrToAddr(submittedAddr string) btcutil.Address {
-	temp, _ := btcutil.DecodeAddress(submittedAddr, &secondCfg.MainNetParams)
-	return temp
-}
-
 func generateInitial() {
 	//privKeys: privateKey1, privateKey2, privateKey3 (type privKey)
-	//pubKeys: pubKey1, pubKey2, pubKey3 (type string)
+	//pubKeys: publicKey1, publicKey2, publicKey3 (type string)
 	log.Println("Generating Initial Keys")
-	seed := bip39.NewSeed(mneumonicStr, "")
-	extKey, _ := bip32.NewMaster(seed, &chaincfg.MainNet)
-	var adjPath string = "2147483648/0/10" + fmt.Sprint(int(personalRoot))
-	child, _ := extKey.DeriveChildFromPath(adjPath)
+	seed := bip39.NewSeed(mneumonicString, "")
+	extendedKey, _ := bip32.NewMaster(seed, &chaincfg.MainNet)
+	var adjustedPath string = "2147483648/0/10" + fmt.Sprint(int(personalRoot))
+	child, _ := extendedKey.DeriveChildFromPath(adjustedPath)
 	privateKey1, _ = child.ECPrivKey()
 	pubKey, _ := child.ECPubKey()
-	pubKey1 = hex.EncodeToString(pubKey.SerialiseCompressed()[:])
-	adjPath = "2147483648/0/10" + fmt.Sprint(int(personalRoot)+1)
-	child, _ = extKey.DeriveChildFromPath(adjPath)
+	publicKey1 = hex.EncodeToString(pubKey.SerialiseCompressed()[:])
+	adjustedPath = "2147483648/0/10" + fmt.Sprint(int(personalRoot)+1)
+	child, _ = extendedKey.DeriveChildFromPath(adjustedPath)
 	privateKey2, _ = child.ECPrivKey()
 	pubKey, _ = child.ECPubKey()
-	pubKey2 = hex.EncodeToString(pubKey.SerialiseCompressed()[:])
-	adjPath = "2147483648/0/10" + fmt.Sprint(int(personalRoot)+2)
-	child, _ = extKey.DeriveChildFromPath(adjPath)
+	publicKey2 = hex.EncodeToString(pubKey.SerialiseCompressed()[:])
+	adjustedPath = "2147483648/0/10" + fmt.Sprint(int(personalRoot)+2)
+	child, _ = extendedKey.DeriveChildFromPath(adjustedPath)
 	privateKey3, _ = child.ECPrivKey()
 	pubKey, _ = child.ECPubKey()
-	pubKey3 = hex.EncodeToString(pubKey.SerialiseCompressed()[:])
+	publicKey3 = hex.EncodeToString(pubKey.SerialiseCompressed()[:])
 }
 func onStartup(importAddresses bool, importAddressesScope bool) {
 	contract, err := preInteraction.NewPreInteraction(common.HexToAddress(configValues.CONTRACTPRE_ADDR), mainPolygonClient)
@@ -485,20 +278,20 @@ func onStartup(importAddresses bool, importAddressesScope bool) {
 	multiSigQuery, _ := contract.Getmultisigamount(&bind.CallOpts{Pending: false, From: polygonAccountType, BlockNumber: nil, Context: nil})
 	recommendedAddressAmount = uint((*multiSigQuery).Uint64())
 	relativePrivKeyArray = []*bec.PrivateKey{privateKey1, privateKey2, privateKey3}
-	relativePubKeyArray = []string{pubKey1, pubKey2, pubKey3}
-	cNID_pubKeys[uint(localNodeID)] = []string{pubKey1, pubKey2, pubKey3}
-	seed := bip39.NewSeed(mneumonicStr, "")
-	extKey, _ := bip32.NewMaster(seed, &chaincfg.MainNet)
+	relativePubKeyArray = []string{publicKey1, publicKey2, publicKey3}
+	cNIDToPublicKeys[uint(localNodeID)] = []string{publicKey1, publicKey2, publicKey3}
+	seed := bip39.NewSeed(mneumonicString, "")
+	extendedKey, _ := bip32.NewMaster(seed, &chaincfg.MainNet)
 	for i := 3; i < int(recommendedAddressAmount); i++ {
 		//TODO bring back to hardened
 		tPath := "0/0/10" + fmt.Sprint(int(personalRoot)+i)
-		childDerived, _ := extKey.DeriveChildFromPath(tPath)
+		childDerived, _ := extendedKey.DeriveChildFromPath(tPath)
 		tPrivKey, _ := childDerived.ECPrivKey()
 		tPubKeyEC, _ := childDerived.ECPubKey()
 		tPubKey := hex.EncodeToString(tPubKeyEC.SerialiseCompressed()[:])
 		relativePrivKeyArray = append(relativePrivKeyArray, tPrivKey)
 		relativePubKeyArray = append(relativePubKeyArray, tPubKey)
-		cNID_pubKeys[uint(localNodeID)] = append(cNID_pubKeys[uint(localNodeID)], tPubKey)
+		cNIDToPublicKeys[uint(localNodeID)] = append(cNIDToPublicKeys[uint(localNodeID)], tPubKey)
 	}
 	var counter uint8 = 0
 	var pubKeyHolder [][]*bec.PublicKey = make([][]*bec.PublicKey, recommendedAddressAmount+1, recommendedAddressAmount+1)
@@ -509,7 +302,7 @@ func onStartup(importAddresses bool, importAddressesScope bool) {
 			log.Println("Failed to fetch IPs from Contract")
 		}
 		validNodesIP = append(validNodesIP, returnedIP)
-		ip_cNID[returnedIP] = currentNodeIDs[j]
+		ipToCNID[returnedIP] = currentNodeIDs[j]
 		url := "http://" + returnedIP + "/reqpubkeys"
 		method := "GET"
 
@@ -553,8 +346,8 @@ func onStartup(importAddresses bool, importAddressesScope bool) {
 			}
 
 			for d := 0; d < len(pubKeyHolder[0]); d++ {
-				allRecWalletPubKeyBEC = append(allRecWalletPubKeyBEC, pubKeyHolder[0][d])
-				allRecWalletPubKeyStr = append(allRecWalletPubKeyStr, hex.EncodeToString((pubKeyHolder[0][d].SerialiseCompressed()[:])))
+				receiveWalletPubKeyBECSlice = append(receiveWalletPubKeyBECSlice, pubKeyHolder[0][d])
+				receiveWalletPubKeyStringSlice = append(receiveWalletPubKeyStringSlice, hex.EncodeToString((pubKeyHolder[0][d].SerialiseCompressed()[:])))
 			}
 			var utilFormP []btcutil.Address
 			utilFormP = []btcutil.Address{}
@@ -596,8 +389,8 @@ func onStartup(importAddresses bool, importAddressesScope bool) {
 		}
 
 		indexConverter[p2shAddress] = indexCount + 1
-		privKeyConverter[p2shAddress] = relativePrivKeyArray[indexCount+1]
-		pubKeyConverter[p2shAddress] = relativePubKeyArray[indexCount+1]
+		privateKeyConverter[p2shAddress] = relativePrivKeyArray[indexCount+1]
+		publicKeyConverter[p2shAddress] = relativePubKeyArray[indexCount+1]
 		if importAddressesScope == true {
 			errIA := bitcoinRPC.ImportAddressRescan(p2shAddress, "", false)
 			if errIA != nil {
@@ -608,8 +401,8 @@ func onStartup(importAddresses bool, importAddressesScope bool) {
 		}
 		validMultiSigs[uint(indexCount)] = p2shAddress
 
-		decAddress, _ := btcutil.DecodeAddress(p2shAddress, &secondCfg.MainNetParams)
-		validMultiSigAddrs = append(validMultiSigAddrs, decAddress)
+		decodedAddress, _ := btcutil.DecodeAddress(p2shAddress, &secondCfg.MainNetParams)
+		validMultiSigAddresses = append(validMultiSigAddresses, decodedAddress)
 		if uint(indexCount) < recommendedAddressAmount-2 {
 			time.AfterFunc(5*time.Second, func() {
 				importAndVerify(indexCount + 1)
@@ -626,7 +419,7 @@ func onStartup(importAddresses bool, importAddressesScope bool) {
 func reSyncKeys(trustSelf bool) {
 	var rskCounter uint = 0
 	var holderPubKeysHashed []string
-	var holderParsed []dataTransmiion
+	var holderParsed []DataTransmission
 	for i := 0; i < len(currentNodeIDs); i++ {
 		if currentNodeIDs[i] != localNodeID {
 
@@ -657,7 +450,7 @@ func reSyncKeys(trustSelf bool) {
 				return
 			}
 
-			var bodyParsed dataTransmiion
+			var bodyParsed DataTransmission
 			err = json.Unmarshal(body, &bodyParsed)
 			bodyHash := sha256.Sum256(body)
 			holderParsed = append(holderParsed, bodyParsed)
@@ -665,39 +458,39 @@ func reSyncKeys(trustSelf bool) {
 			//Hash body
 			rskCounter++
 		}
-		cTracker := make(map[string]uint)
-		var cWinner uint
-		var cIndex uint
+		countTracker := make(map[string]uint)
+		var countWinner uint
+		var winnerIndex uint
 		for i := 0; i < len(holderPubKeysHashed); i++ {
-			if cTracker[holderPubKeysHashed[i]] == 0 {
-				cTracker[holderPubKeysHashed[i]] = 1
+			if countTracker[holderPubKeysHashed[i]] == 0 {
+				countTracker[holderPubKeysHashed[i]] = 1
 			} else {
-				cTracker[holderPubKeysHashed[i]]++
+				countTracker[holderPubKeysHashed[i]]++
 			}
-			if cTracker[holderPubKeysHashed[i]] > cWinner {
-				cWinner = cTracker[holderPubKeysHashed[i]]
-				cIndex = uint(i)
+			if countTracker[holderPubKeysHashed[i]] > countWinner {
+				countWinner = countTracker[holderPubKeysHashed[i]]
+				winnerIndex = uint(i)
 			}
 		}
 
-		addressConverter = holderParsed[cIndex].Addrconv
-		receiveWalletPubKey = holderParsed[cIndex].PublicKeys
+		addressConverter = holderParsed[winnerIndex].AddressConverter
+		receiveWalletPubKey = holderParsed[winnerIndex].PublicKeys
 
 	}
 }
 
 // ==============MONITOR INCOMING TXS====================
 func monitorIncomingBitcoinTransactions() {
-	if len(validMultiSigAddrs) > 0 {
-		uTXOs, err := bitcoinRPC.ListUnspentMinMaxAddresses(1, 999, validMultiSigAddrs)
+	if len(validMultiSigAddresses) > 0 {
+		uTXOs, err := bitcoinRPC.ListUnspentMinMaxAddresses(1, 999, validMultiSigAddresses)
 		if err != nil {
 			log.Println("Error listing UTXOs")
 		}
 
 		for i := 0; i < len(uTXOs); i++ {
 
-			uTXO_satoshiAmount := uint(uTXOs[i].Amount * 100000000)
-			if uTXO_satoshiAmount > 50000 {
+			SatoshiAmountUTXO := uint(uTXOs[i].Amount * 100000000)
+			if SatoshiAmountUTXO > 50000 {
 				//TODO estimate
 				gasFee := 6000
 				rScript := redeemScriptCoverter[uTXOs[i].Address]
@@ -707,7 +500,7 @@ func monitorIncomingBitcoinTransactions() {
 				outpmap[multiSigDepositAddress] = uTXOs[i].Amount - float64(float64(gasFee)/100000000)
 				crout := bitcoindclient.CreateRawTransactionReqOutputs{A: outpmap}
 				thr := bitcoindclient.CreateRawTransactionReq{Inputs: []bitcoindclient.CreateRawTransactionReqInputs{crinp}, Outputs: []bitcoindclient.CreateRawTransactionReqOutputs{crout}, LockTime: float64(0), Replaceable: false}
-				txres, erry := bc.CreateRawTransaction(context.Background(), thr)
+				transactionResult, erry := bc.CreateRawTransaction(context.Background(), thr)
 				if erry != nil {
 					// Handle err
 					log.Println("creatingrawtx error:", erry)
@@ -716,15 +509,15 @@ func monitorIncomingBitcoinTransactions() {
 
 				}
 
-				bPK1 := privKeyConverter[uTXOs[i].Address]
+				bPK1 := privateKeyConverter[uTXOs[i].Address]
 
-				lpp := bPK1.Serialise()
-				kj := secp256k1.PrivKeyFromBytes(lpp)
-				frrq, _ := btcutil.NewWIF(kj, &secondCfg.MainNetParams, true)
-				krt := bitcoindclient.SignRawTransactionWithKeyReqPrevTxs{TxID: uTXOs[i].TxID, Vout: float64(uTXOs[i].Vout), ScriptPubkey: uTXOs[i].ScriptPubKey, RedeemScript: rScript}
-				var svvr []bitcoindclient.SignRawTransactionWithKeyReqPrevTxs = []bitcoindclient.SignRawTransactionWithKeyReqPrevTxs{krt}
-				jreq := bitcoindclient.SignRawTransactionWithKeyReq{HexString: txres.Hex, Privkeys: []string{frrq.String()}, PrevTxs: svvr}
-				refy, err := bc.SignRawTransactionWithKey(context.Background(), jreq)
+				serializedPrivateKey := bPK1.Serialise()
+				privateKeyFormatted := secp256k1.PrivKeyFromBytes(serializedPrivateKey)
+				currentWIF, _ := btcutil.NewWIF(privateKeyFormatted, &secondCfg.MainNetParams, true)
+				kRawTransaction := bitcoindclient.SignRawTransactionWithKeyReqPrevTxs{TxID: uTXOs[i].TxID, Vout: float64(uTXOs[i].Vout), ScriptPubkey: uTXOs[i].ScriptPubKey, RedeemScript: rScript}
+				var svvr []bitcoindclient.SignRawTransactionWithKeyReqPrevTxs = []bitcoindclient.SignRawTransactionWithKeyReqPrevTxs{kRawTransaction}
+				sReq := bitcoindclient.SignRawTransactionWithKeyReq{HexString: transactionResult.Hex, Privkeys: []string{currentWIF.String()}, PrevTxs: svvr}
+				signedRawTransaction, err := bc.SignRawTransactionWithKey(context.Background(), sReq)
 
 				if err != nil {
 					// Handle err
@@ -733,7 +526,7 @@ func monitorIncomingBitcoinTransactions() {
 					log.Println("Success signing")
 				}
 
-				recPSBTs[txres.Hex] = svvr
+				receivedPSBTs[transactionResult.Hex] = svvr
 
 				nonceCurrent, err := mainPolygonClient.PendingNonceAt(context.Background(), polygonAccountType)
 				if err != nil {
@@ -750,29 +543,29 @@ func monitorIncomingBitcoinTransactions() {
 					auth.Value = big.NewInt(0)      // in wei
 					auth.GasLimit = uint64(1000000) // in units
 					auth.GasPrice = gasPrice
-					submTX, err := preInteractionContract.SubmitConsensus(auth, uTXOs[0].Address, uTXOs[0].Address, new(big.Int).SetUint64(uint64(uTXO_satoshiAmount-bitcoinTxFee)))
+					submittedTX, err := preInteractionContract.SubmitConsensus(auth, uTXOs[0].Address, uTXOs[0].Address, new(big.Int).SetUint64(uint64(SatoshiAmountUTXO-bitcoinTXFee)))
 					if err != nil {
 						log.Println("Error submitting to Polygon", err)
 					} else {
-						log.Println("TX hash for polygon: ", submTX.Hash().String())
+						log.Println("TX hash for polygon: ", submittedTX.Hash().String())
 					}
-					if reflect.DeepEqual(earlyRec[txres.Hex], svvr) {
-						psbt := holdingTable[txres.Hex]
-						bPK := privKeyConverter[uTXOs[i].Address]
-						lpp1 := bPK.Serialise()
-						kj1 := secp256k1.PrivKeyFromBytes(lpp1)
-						frrq, _ := btcutil.NewWIF(kj1, &secondCfg.MainNetParams, true)
-						jreq2 := bitcoindclient.SignRawTransactionWithKeyReq{HexString: psbt, Privkeys: []string{frrq.String()}, PrevTxs: svvr}
-						refy2, err := bc.SignRawTransactionWithKey(context.Background(), jreq2)
+					if reflect.DeepEqual(earlyReceipt[transactionResult.Hex], svvr) {
+						psbt := holdingTable[transactionResult.Hex]
+						bPK := privateKeyConverter[uTXOs[i].Address]
+						serializedPrivateKey2 := bPK.Serialise()
+						privateKeyFormatted2 := secp256k1.PrivKeyFromBytes(serializedPrivateKey2)
+						currentWIF2, _ := btcutil.NewWIF(privateKeyFormatted2, &secondCfg.MainNetParams, true)
+						sReq2 := bitcoindclient.SignRawTransactionWithKeyReq{HexString: psbt, Privkeys: []string{currentWIF2.String()}, PrevTxs: svvr}
+						signedRawTransaction2, err := bc.SignRawTransactionWithKey(context.Background(), sReq2)
 
-						if alreadyProcessed[txres.Hex] == false && err == nil {
+						if alreadyProcessed[transactionResult.Hex] == false && err == nil {
 
-							alreadyProcessed[txres.Hex] = true
+							alreadyProcessed[transactionResult.Hex] = true
 
 							hrtt := 0.0
 							var maxFee *float64 = &hrtt
 
-							txHexToSend := bitcoindclient.SendRawTransactionReq{HexString: refy2.Hex, MaxFeeRate: maxFee}
+							txHexToSend := bitcoindclient.SendRawTransactionReq{HexString: signedRawTransaction2.Hex, MaxFeeRate: maxFee}
 							rawSent, err := bc.SendRawTransaction(context.Background(), txHexToSend)
 							if err != nil {
 								log.Println("Error broadcasting raw BTC transaction", err)
@@ -803,10 +596,10 @@ func monitorIncomingBitcoinTransactions() {
 						})
 
 					} else {
-						tempStruct := psbtFullStruct{refy.Hex, uint(indexConverter[uTXOs[0].Address]), svvr, txres.Hex}
+						dataToSend := PSBTFullStruct{signedRawTransaction.Hex, uint(indexConverter[uTXOs[0].Address]), svvr, transactionResult.Hex}
 						for i := 0; i < len(validNodesIP); i++ {
-							if ip_cNID[validNodesIP[i]] != localNodeID {
-								jsonBytes, _ := json.Marshal(tempStruct)
+							if ipToCNID[validNodesIP[i]] != localNodeID {
+								jsonBytes, _ := json.Marshal(dataToSend)
 								res, err := http.Post("http://"+validNodesIP[i]+"/psbt", "application/json",
 									bytes.NewBuffer(jsonBytes))
 								if err != nil {
@@ -836,9 +629,9 @@ func checkIncomingPolygonTransaction() {
 	txStruct, _ := postContract.Gettxs(&bind.CallOpts{Pending: false, From: polygonAccountType, BlockNumber: nil, Context: nil}, new(big.Int).SetUint64(uint64(processedBTCOutbound)))
 	if len(txStruct.RecipientBtcAddr) > 0 && txStruct.Procd == false {
 		decodedAddress := txStruct.RecipientBtcAddr
-		var amtToSend uint
+		var amountToSend uint
 
-		amtToSend = uint(txStruct.SatsAmount.Uint64())
+		amountToSend = uint(txStruct.SatsAmount.Uint64())
 
 		var uTXO []bitcoindclient.CreateRawTransactionReqInputs
 		var uTXOSatAmount uint = 0
@@ -856,7 +649,7 @@ func checkIncomingPolygonTransaction() {
 			}
 			var svvr []bitcoindclient.SignRawTransactionWithKeyReqPrevTxs = []bitcoindclient.SignRawTransactionWithKeyReqPrevTxs{}
 
-			for i := 0; (i < len(uTXOList)) && (uTXOSatAmount < amtToSend+gasFee); i++ {
+			for i := 0; (i < len(uTXOList)) && (uTXOSatAmount < amountToSend+gasFee); i++ {
 				specificUTXO := bitcoindclient.CreateRawTransactionReqInputs{TxID: uTXOList[i].TxID, Vout: float64(uTXOList[i].Vout)}
 				uTXO = append(uTXO, specificUTXO)
 				uTXOSatAmount += uint(uTXOList[i].Amount * 100000000)
@@ -865,49 +658,49 @@ func checkIncomingPolygonTransaction() {
 				svvr = append(svvr, krt)
 			}
 
-			uTXO_satoshiAmount := txStruct.SatsAmount.Uint64()
-			if uTXO_satoshiAmount > 50000 {
+			SatoshiAmountUTXO := txStruct.SatsAmount.Uint64()
+			if SatoshiAmountUTXO > 50000 {
 				//TODO estimate
 				gasFee := 6000
 				rScript := redeemScriptCoverter[multiSigDepositAddress]
 
 				log.Println("rscript", rScript)
 				outpmap := make(map[string]float64)
-				outpmap[decodedAddress] = float64(float64(int(uTXO_satoshiAmount)-gasFee) / 100000000)
-				outpmap[multiSigDepositAddress] = float64(float64((uTXOSatAmount-uint(uTXO_satoshiAmount))-uint(gasFee)) / 100000000)
+				outpmap[decodedAddress] = float64(float64(int(SatoshiAmountUTXO)-gasFee) / 100000000)
+				outpmap[multiSigDepositAddress] = float64(float64((uTXOSatAmount-uint(SatoshiAmountUTXO))-uint(gasFee)) / 100000000)
 				crout := bitcoindclient.CreateRawTransactionReqOutputs{A: outpmap}
 				thr := bitcoindclient.CreateRawTransactionReq{Inputs: uTXO, Outputs: []bitcoindclient.CreateRawTransactionReqOutputs{crout}, LockTime: float64(0), Replaceable: false}
-				txres, erry := bc.CreateRawTransaction(context.Background(), thr)
+				transactionResult, erry := bc.CreateRawTransaction(context.Background(), thr)
 				if erry != nil {
 					// Handle err
 					log.Println("creatingrawtx error:", erry)
 				} else {
 					log.Println("Success creating")
-					log.Println(txres.Hex)
+					log.Println(transactionResult.Hex)
 				}
 
-				lpp := recWalletPrivateKey.Serialise()
-				kj := secp256k1.PrivKeyFromBytes(lpp)
-				frrq, _ := btcutil.NewWIF(kj, &secondCfg.MainNetParams, true)
-				jreq := bitcoindclient.SignRawTransactionWithKeyReq{HexString: txres.Hex, Privkeys: []string{frrq.String()}, PrevTxs: svvr}
-				refy, _ := bc.SignRawTransactionWithKey(context.Background(), jreq)
+				serializedPrivateKey := recWalletPrivateKey.Serialise()
+				privateKeyFormatted := secp256k1.PrivKeyFromBytes(serializedPrivateKey)
+				currentWIF, _ := btcutil.NewWIF(privateKeyFormatted, &secondCfg.MainNetParams, true)
+				signRequirement := bitcoindclient.SignRawTransactionWithKeyReq{HexString: transactionResult.Hex, Privkeys: []string{currentWIF.String()}, PrevTxs: svvr}
+				signedRawTransaction, _ := bc.SignRawTransactionWithKey(context.Background(), signRequirement)
 
-				recPSBTs[txres.Hex] = svvr
+				receivedPSBTs[transactionResult.Hex] = svvr
 
-				if reflect.DeepEqual(earlyRec[txres.Hex], svvr) {
-					nFSBT := holdingTable[txres.Hex]
+				if reflect.DeepEqual(earlyReceipt[transactionResult.Hex], svvr) {
+					nFSBT := holdingTable[transactionResult.Hex]
 
-					lpp1 := recWalletPrivateKey.Serialise()
-					kj1 := secp256k1.PrivKeyFromBytes(lpp1)
-					frrq, _ := btcutil.NewWIF(kj1, &secondCfg.MainNetParams, true)
-					jreq2 := bitcoindclient.SignRawTransactionWithKeyReq{HexString: nFSBT, Privkeys: []string{frrq.String()}, PrevTxs: svvr}
-					refy2, err := bc.SignRawTransactionWithKey(context.Background(), jreq2)
+					serializedPrivateKey2 := recWalletPrivateKey.Serialise()
+					privateKeyFormatted2 := secp256k1.PrivKeyFromBytes(serializedPrivateKey2)
+					currentWIF2, _ := btcutil.NewWIF(privateKeyFormatted2, &secondCfg.MainNetParams, true)
+					signRequirement2 := bitcoindclient.SignRawTransactionWithKeyReq{HexString: nFSBT, Privkeys: []string{currentWIF2.String()}, PrevTxs: svvr}
+					signedRawTransaction2, err := bc.SignRawTransactionWithKey(context.Background(), signRequirement2)
 
-					if alreadyProcessed[txres.Hex] == false && err == nil {
-						alreadyProcessed[txres.Hex] = true
+					if alreadyProcessed[transactionResult.Hex] == false && err == nil {
+						alreadyProcessed[transactionResult.Hex] = true
 						hrtt := 0.1
 						var maxFee *float64 = &hrtt
-						txHexToSend := bitcoindclient.SendRawTransactionReq{HexString: refy2.Hex, MaxFeeRate: maxFee}
+						txHexToSend := bitcoindclient.SendRawTransactionReq{HexString: signedRawTransaction2.Hex, MaxFeeRate: maxFee}
 						rawSent, err := bc.SendRawTransaction(context.Background(), txHexToSend)
 						if err != nil {
 							log.Println("Error broadcasting raw BTC transaction")
@@ -918,7 +711,7 @@ func checkIncomingPolygonTransaction() {
 
 				} else {
 					//if not already recieved, pass it to other nodes
-					tempStruct := psbtFullStruct{refy.Hex, uint(999), svvr, txres.Hex}
+					tempStruct := PSBTFullStruct{signedRawTransaction.Hex, uint(999), svvr, transactionResult.Hex}
 					for i := 0; i < len(validNodesIP); i++ {
 						if i != int(localNodeID) {
 							url := "http://" + validNodesIP[i] + "/psbt"
@@ -960,39 +753,38 @@ func checkIncomingPolygonTransaction() {
 }
 
 func psbtHandlingPOST(rw http.ResponseWriter, req *http.Request) {
-	var decodedBody psbtFullStruct
+	var decodedBody PSBTFullStruct
 	body, err := io.ReadAll(req.Body)
 	err = json.Unmarshal(body, &decodedBody)
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
-	var sPK uint = decodedBody.Spk
-	psbtHex := decodedBody.Psbt
+	var SPK uint = decodedBody.SPK
+	psbtHex := decodedBody.PSBT
 	txvh := decodedBody.TxVirginHex
 	if err != nil {
 		panic(err)
 	}
-	svvr := decodedBody.Svvra
+	sVRASlice := decodedBody.SVRA
 	respBytes, _ := hex.DecodeString("success")
 	rw.Write(respBytes)
-	log.Println(reflect.DeepEqual(recPSBTs[txvh], decodedBody.Svvra))
+	log.Println(reflect.DeepEqual(receivedPSBTs[txvh], decodedBody.SVRA))
 
-	log.Println("hexVirgin: ", txvh, "psbtHex: ", psbtHex, recPSBTs[txvh], decodedBody.Svvra, sPK)
-	if reflect.DeepEqual(recPSBTs[txvh], decodedBody.Svvra) {
+	log.Println("Virgin Hex: ", txvh, "PSBT Hex: ", psbtHex, receivedPSBTs[txvh], decodedBody.SVRA, SPK)
+	if reflect.DeepEqual(receivedPSBTs[txvh], decodedBody.SVRA) {
 		//make sure result is good
 		lpp := recWalletPrivateKey.Serialise()
-		if sPK == 999 {
-			lpp = relativePrivKeyArray[sPK].Serialise()
+		if SPK == 999 {
+			lpp = relativePrivKeyArray[SPK].Serialise()
 		}
 		kj := secp256k1.PrivKeyFromBytes(lpp)
 		frrq, _ := btcutil.NewWIF(kj, &secondCfg.MainNetParams, true)
-		jreq := bitcoindclient.SignRawTransactionWithKeyReq{HexString: psbtHex, Privkeys: []string{frrq.String()}, PrevTxs: svvr}
+		jreq := bitcoindclient.SignRawTransactionWithKeyReq{HexString: psbtHex, Privkeys: []string{frrq.String()}, PrevTxs: sVRASlice}
 		refy, err := bc.SignRawTransactionWithKey(context.Background(), jreq)
 		if err != nil {
 			log.Println(err)
 		}
-		log.Println(988, alreadyProcessed[txvh])
 		if alreadyProcessed[txvh] == false && err == nil {
 			log.Println(986)
 			alreadyProcessed[txvh] = true
@@ -1023,11 +815,11 @@ func psbtHandlingPOST(rw http.ResponseWriter, req *http.Request) {
 					auth.Value = big.NewInt(0)      // in wei
 					auth.GasLimit = uint64(1000000) // in units
 					auth.GasPrice = gasPrice
-					submtxop, errop := polygonBTCOverallContract.OraclePing(auth, uint8(7))
+					submittedTXop, errop := polygonBTCOverallContract.OraclePing(auth, uint8(7))
 					if errop != nil {
 						log.Println("Error making Oracle Ping")
 					} else {
-						log.Println("Successfully swapmined: ", submtxop.Hash())
+						log.Println("Successfully swapmined: ", submittedTXop.Hash())
 					}
 
 				}
@@ -1035,7 +827,7 @@ func psbtHandlingPOST(rw http.ResponseWriter, req *http.Request) {
 
 		})
 	} else {
-		earlyRec[txvh] = svvr
+		earlyReceipt[txvh] = sVRASlice
 		holdingTable[txvh] = psbtHex
 	}
 
@@ -1047,22 +839,22 @@ func psbtHandlingPOST(rw http.ResponseWriter, req *http.Request) {
 //make recvnodepubkeys valid endpoint temporarily
 
 func subscribeToPolygon() {
-	sentSigBool, err := preInteractionContract.SignalSent(&bind.CallOpts{Pending: false, From: polygonAccountType, BlockNumber: nil, Context: nil}, big.NewInt(int64(SigNumber)))
+	sentSigBool, err := preInteractionContract.SignalSent(&bind.CallOpts{Pending: false, From: polygonAccountType, BlockNumber: nil, Context: nil}, big.NewInt(int64(SignalNumber)))
 	if err != nil {
 		log.Println(err)
 	}
 	var inputsK uint
 	inputsK = uint(sentSigBool)
 	if inputsK == 2 || inputsK == 3 {
-		SigNumber++
+		SignalNumber++
 		openEndpoint = true
 		time.AfterFunc(300*time.Second, func() {
 			openEndpoint = false
 		})
-		cNID_pubKeys = make(map[uint][]string)
+		cNIDToPublicKeys = make(map[uint][]string)
 		listenGL = make(map[string]bool)
 		relativePrivKeyArray = make([]*bec.PrivateKey, 0)
-		cNID_pubKeys[uint(localNodeID)] = make([]string, 0)
+		cNIDToPublicKeys[uint(localNodeID)] = make([]string, 0)
 
 		cNIDsResult, errCNIDs := preInteractionContract.Getinids(&bind.CallOpts{Pending: false, From: polygonAccountType, BlockNumber: nil, Context: nil})
 		if errCNIDs != nil {
@@ -1079,17 +871,17 @@ func subscribeToPolygon() {
 
 		relativePrivKeyArray = []*bec.PrivateKey{recWalletPrivateKey, privateKey1, privateKey2, privateKey3}
 		//generate the number of pubkeys
-		relativePubKeyArray = []string{receiveWalletPubKeyString, pubKey1, pubKey2, pubKey3}
-		cNID_pubKeys[uint(localNodeID)] = []string{receiveWalletPubKeyString, pubKey1, pubKey2, pubKey3}
+		relativePubKeyArray = []string{receiveWalletPubKeyString, publicKey1, publicKey2, publicKey3}
+		cNIDToPublicKeys[uint(localNodeID)] = []string{receiveWalletPubKeyString, publicKey1, publicKey2, publicKey3}
 		for i := 3; uint(i) < recommendedAddressAmount; i++ {
 			var pathY string = "2147483648/0/10" + fmt.Sprint(uint(personalRoot)+uint(i))
-			child, _ := extKey.DeriveChildFromPath(pathY)
+			child, _ := extendedKey.DeriveChildFromPath(pathY)
 			privKey, _ := child.ECPrivKey()
 			pubKey, _ := child.ECPubKey()
 			pubKeyStr := hex.EncodeToString((pubKey.SerialiseCompressed()[:]))
 			relativePrivKeyArray = append(relativePrivKeyArray, privKey)
 			relativePubKeyArray = append(relativePubKeyArray, pubKeyStr)
-			cNID_pubKeys[uint(localNodeID)] = append(cNID_pubKeys[uint(localNodeID)], pubKeyStr)
+			cNIDToPublicKeys[uint(localNodeID)] = append(cNIDToPublicKeys[uint(localNodeID)], pubKeyStr)
 		}
 		validNodesIP = make([]string, 0)
 
@@ -1100,7 +892,7 @@ func subscribeToPolygon() {
 				log.Printf("Error retrieving IP for Node %d", currentNodeIDs[u])
 			}
 			validNodesIP = append(validNodesIP, retIP)
-			ip_cNID[retIP] = currentNodeIDs[u]
+			ipToCNID[retIP] = currentNodeIDs[u]
 		}
 
 		method := "POST"
@@ -1113,14 +905,14 @@ func subscribeToPolygon() {
 		//then send node's pubkeys to all nodes
 		time.Sleep(5 * time.Second)
 		for j := 0; j < len(validNodesIP); j++ {
-			if ip_cNID[validNodesIP[j]] != localNodeID {
+			if ipToCNID[validNodesIP[j]] != localNodeID {
 				if inputsK == 3 {
 
-					jsonBytes, _ := json.Marshal(recvFullStruct{localPortNum, relativePubKeyArray[(len(relativePubKeyArray) - 4):], true})
+					jsonBytes, _ := json.Marshal(ReceiptFullStruct{localPortNum, relativePubKeyArray[(len(relativePubKeyArray) - 4):], true})
 					payload = bytes.NewBuffer(jsonBytes)
 
 				} else {
-					jsonBytes, _ := json.Marshal(recvFullStruct{localPortNum, relativePubKeyArray, false})
+					jsonBytes, _ := json.Marshal(ReceiptFullStruct{localPortNum, relativePubKeyArray, false})
 					payload = bytes.NewBuffer(jsonBytes)
 				}
 				url := "http://" + validNodesIP[j] + "/recvnodepubkeys"
@@ -1142,11 +934,11 @@ func subscribeToPolygon() {
 				time.Sleep(5 * time.Second)
 			}
 		}
-		_, qErr := mySQLClient.Query(`UPDATE `+configValues.DB_NAME+` SET cval = ? WHERE name = 'signum'`, SigNumber)
+		_, qErr := mySQLClient.Query(`UPDATE `+configValues.DB_NAME+` SET cval = ? WHERE name = 'signum'`, SignalNumber)
 		if qErr != nil {
 			log.Println(qErr)
 		} else {
-			log.Printf("Updated signum %d", SigNumber)
+			log.Printf("Updated signum %d", SignalNumber)
 		}
 	}
 }
@@ -1165,8 +957,8 @@ func reqpubkeysGET(rw http.ResponseWriter, req *http.Request) {
 	rw.Write(jsonBytes)
 }
 func fullpubkeylistGET(rw http.ResponseWriter, req *http.Request) {
-	var dataSendFPK dataTransmiion
-	dataSendFPK = dataTransmiion{addressConverter, receiveWalletPubKey}
+	var dataSendFPK DataTransmission
+	dataSendFPK = DataTransmission{addressConverter, receiveWalletPubKey}
 	jsonBytes, _ := json.Marshal(dataSendFPK)
 	rw.Write(jsonBytes)
 }
@@ -1174,7 +966,7 @@ func recvnodepubkeysPOST(rw http.ResponseWriter, req *http.Request) {
 	if openEndpoint == true {
 		tbSent, _ := hex.DecodeString("success")
 		rw.Write(tbSent)
-		var decodedBody recvFullStruct
+		var decodedBody ReceiptFullStruct
 		body, err := io.ReadAll(req.Body)
 		err = json.Unmarshal(body, &decodedBody)
 		var portTEST uint = decodedBody.PortTEST
@@ -1189,16 +981,6 @@ func recvnodepubkeysPOST(rw http.ResponseWriter, req *http.Request) {
 			log.Println("Invalid IP")
 			return
 		}
-		/*
-			//Removed as this is vulnerable to spoofing
-			userRemoteIP := req.Header.Get("X-Real-Ip")
-			if userRemoteIP == "" {
-				userRemoteIP = req.Header.Get("X-Forwarded-For")
-			}
-			if userRemoteIP == "" {
-				userRemoteIP = req.RemoteAddr
-			}
-		*/
 		r, _ := regexp.Compile(":")
 		kIndex := r.FindStringIndex(userRemoteIP)
 		if kIndex == nil {
@@ -1210,20 +992,20 @@ func recvnodepubkeysPOST(rw http.ResponseWriter, req *http.Request) {
 		if listenGL[userRemoteIP+":"+fmt.Sprint(portTEST)] == false {
 			listenGL[userRemoteIP+":"+fmt.Sprint(portTEST)] = true
 			//TODO change this to bool and not placeholder (9)
-			if ip_cNID[userRemoteIP+":"+fmt.Sprint(portTEST)] != 9 {
-				cNID_pubKeys[uint(ip_cNID[userRemoteIP+":"+fmt.Sprint(portTEST)])] = pubKeyArray
+			if ipToCNID[userRemoteIP+":"+fmt.Sprint(portTEST)] != 9 {
+				cNIDToPublicKeys[uint(ipToCNID[userRemoteIP+":"+fmt.Sprint(portTEST)])] = pubKeyArray
 			}
 			var checkFlag bool = true
 			var lowestNum uint = 0
 			for i := 0; i < len(currentNodeIDs); i++ {
 
-				if cNID_pubKeys[uint(currentNodeIDs[i])] == nil || len(cNID_pubKeys[uint(currentNodeIDs[i])]) < 3 {
+				if cNIDToPublicKeys[uint(currentNodeIDs[i])] == nil || len(cNIDToPublicKeys[uint(currentNodeIDs[i])]) < 3 {
 					checkFlag = false
 				} else {
 					if lowestNum == 0 {
-						lowestNum = uint(len(cNID_pubKeys[uint(currentNodeIDs[i])]))
-					} else if uint(len(cNID_pubKeys[uint(currentNodeIDs[i])])) < lowestNum {
-						lowestNum = uint(len(cNID_pubKeys[uint(currentNodeIDs[i])]))
+						lowestNum = uint(len(cNIDToPublicKeys[uint(currentNodeIDs[i])]))
+					} else if uint(len(cNIDToPublicKeys[uint(currentNodeIDs[i])])) < lowestNum {
+						lowestNum = uint(len(cNIDToPublicKeys[uint(currentNodeIDs[i])]))
 					}
 				}
 			}
@@ -1233,7 +1015,7 @@ func recvnodepubkeysPOST(rw http.ResponseWriter, req *http.Request) {
 
 					publicKeysNew := make([]*bec.PublicKey, 0)
 					for j := 0; j < len(currentNodeIDs); j++ {
-						decPubKey := fromStringToPubKey(cNID_pubKeys[uint(j)][k])
+						decPubKey := fromStringToPubKey(cNIDToPublicKeys[uint(j)][k])
 						publicKeysNew = append(publicKeysNew, decPubKey)
 					}
 					sort.Sort(rPubKeys(publicKeysNew))
@@ -1257,11 +1039,11 @@ func recvnodepubkeysPOST(rw http.ResponseWriter, req *http.Request) {
 						redeemScriptCoverter[newMultiSigP.Address] = newMultiSigP.RedeemScript
 					} else {
 						indexConverter[multisigaddrRecNew] = uint8(k)
-						privKeyConverter[multisigaddrRecNew] = relativePrivKeyArray[k]
-						pubKeyConverter[multisigaddrRecNew] = relativePubKeyArray[k]
+						privateKeyConverter[multisigaddrRecNew] = relativePrivKeyArray[k]
+						publicKeyConverter[multisigaddrRecNew] = relativePubKeyArray[k]
 						addressRecNew, _ := btcutil.DecodeAddress(multisigaddrRecNew, &secondCfg.MainNetParams)
-						validMultiSigAddrs = append(validMultiSigAddrs, addressRecNew)
-						validMultiSigs[uint(len(validMultiSigAddrs)-1)] = multisigaddrRecNew
+						validMultiSigAddresses = append(validMultiSigAddresses, addressRecNew)
+						validMultiSigs[uint(len(validMultiSigAddresses)-1)] = multisigaddrRecNew
 						redeemScriptCoverter[newMultiSigP.Address] = newMultiSigP.RedeemScript
 					}
 					importResult := bitcoinRPC.ImportAddressRescan(multisigaddrRecNew, "", false)
@@ -1334,7 +1116,6 @@ func peripheralToCentralSwapmine() {
 		if nErr != nil {
 			log.Println(nErr)
 		} else {
-			//TODO send TX
 			gasPrice, err := mainPolygonClient.SuggestGasPrice(context.Background())
 			if err != nil {
 				log.Println("Error retrieving Polygon Block Number")

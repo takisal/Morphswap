@@ -12,10 +12,10 @@ contract OverallContract is ChainlinkClient, MorphswapStorage {
     using Chainlink for Chainlink.Request;
 
     //Pair IDs are canon across all chains. They are suffixed by the internal chain id (eg 115002 for pair 115 on chain internal id 2)
-    //method IDs: 1(buy), 2(new_pair), 3(dsl), 4(ssl), 5(swapped), 6 (mdl), 7 (finish_ds_liq), 8(finish_new_pair), 9(removeliq_ds)
+    //Method IDs: 1(Buy), 2(New Pair), 3(Begin DSL), 4(SSL), 5(Swapped), 6 (MDL), 7 (Finish DSL), 8(Finish New Pair), 9(Remove DSL)
     constructor(
         bool _isCentral,
-        address mstoken,
+        address _msToken,
         uint _defaultProposalLifespan,
         uint8 _internalchainid,
         address _chainlinkAddress,
@@ -23,38 +23,43 @@ contract OverallContract is ChainlinkClient, MorphswapStorage {
         uint _chainlinkFee,
         address _chainlinkToNativeCoinAddress
     ) {
-        _admin = msg.sender;
         txNumber = 0;
         pairTracker = 0;
+        oneQuadrillion = 10 ** 15;
+        _fee = 30;
+        _referralBonusMultiplier = 10;
+        defaultTipMultiplier = 2;
+        defaultTipAlternate = 100000 ether;
+
+        _admin = msg.sender;
+
         uint id;
         assembly {
             id := chainid()
         }
         chainID = id;
         uint chain_id = id;
-        defaultTipMultiplier = 2;
-        defaultTipAlternate = 100000 ether;
-        //atlernatetip is divided by 2, so a value of 3 is effectively 150%
-        alternateTipMultiplier = 3;
-        centralContract = _isCentral;
-        _fee = 30;
-        _referralBonusMultiplier = 10;
-        _morphswapToken = IERC20(mstoken);
+
+        _morphswapToken = IERC20(_msToken);
         _morphswapToken.approve(address(this), type(uint256).max);
-        _morphswapTokenAddress = mstoken;
+        _morphswapTokenAddress = _msToken;
         _proposalLifespan = _defaultProposalLifespan;
+
+        centralContract = _isCentral;
         internalChainID = _internalchainid;
         chainlinkAddress = _chainlinkAddress;
         setChainlinkToken(chainlinkAddress);
         setChainlinkOracle(_chainlinkOracle);
-        //chainlinkFee should be in the form of no decimals (eg 100000000000000000 instead of 0.1)
-        chainlinkFee = _chainlinkFee;
-
         internalChainIDToChainID[internalChainID] = chain_id;
         chainIDToInternalChainID[chain_id] = internalChainID;
-        _swapminingFee = (_chainlinkFee * 11) / 10;
-        oneQuadrillion = 10 ** 15;
+
         priceFeed = AggregatorV3Interface(_chainlinkToNativeCoinAddress);
+        //chainlinkFee should be in the form of no decimals (eg 100000000000000000 instead of 0.1)
+        chainlinkFee = _chainlinkFee;
+        _swapminingFee = (_chainlinkFee * 11) / 10;
+
+        //atlernatetip is divided by 2, so a value of 3 is effectively 150%
+        alternateTipMultiplier = 3;
 
         //Avoids the errors that would result from trying to add own chain to supported chains list (only relevant for central chain)
         if (centralContract) {
@@ -297,8 +302,8 @@ contract OverallContract is ChainlinkClient, MorphswapStorage {
         return true;
     }
 
-    //composition of returned bytes: uint8, uint8, uint32, uint8, 160byte address, uint32, 160byte address, 160byte address    128byte uint, 128 byte uint, 128byte uint
-    //composed of: uint8 method_id, uint8 internalstartchainid, uint32 pair_id, uint8 internalendchainid, address finalcw, uint32 secondpair_id, address firstca (for new pairs), address finalca (for new pairs), uint128 poolbalbefore, uint128 soldamount, uint 128 tipamount
+    //Composition of returned bytes: uint8, uint8, uint32, uint8, 160byte address, uint32, 160byte address, 160byte address    128byte uint, 128 byte uint, 128byte uint
+    //Composed of: uint8 method_id, uint8 internalstartchainid, uint32 pair_id, uint8 internalendchainid, address finalcw, uint32 secondpair_id, address firstca (for new pairs), address finalca (for new pairs), uint128 poolbalbefore, uint128 soldamount, uint 128 tipamount
     function getTxByRTxNumber(
         uint8 requiredChainID,
         uint128 rTXNumber
@@ -417,6 +422,17 @@ contract OverallContract is ChainlinkClient, MorphswapStorage {
         return success;
     }
 
+    /// @notice Begins the process of creating a pool. Can only be used on the central chain.
+    /// @dev creates data to be sent to the peripheral chain in the pool, to be processed by the {finishPoolPair} function, called by the user on the peripheral chain of the pool
+    /// @param chain1AssetAmount the amount of this chain's asset the pool will start with, provided by user who calls this function
+    /// @param chain1Asset the address of the central chain's asset that comprises half of the pool
+    /// @param chain2 the address of the central chain's asset that comprises half of the pool
+    /// @param chain2Asset the address of the peripheral chain's asset that comprises half of the pool
+    /// @param chain2Wallet the address of the account that will be calling the {finishPoolPair} function to finish the pool's creation
+    /// @param tipAmount the amount of the native coin to be swapped, with the proceeds going to the swapminer
+    /// @return address returns address of the asset pool on this chain
+    /// @return uint returns pair ID of the pool
+    /// Emits a {NewPair} event
     function deployNewPoolPair(
         uint chain1AssetAmount,
         address chain1Asset,
@@ -458,17 +474,32 @@ contract OverallContract is ChainlinkClient, MorphswapStorage {
         return true;
     }
 
+    /// @notice Finishes the process of creating a pool. Can only be used on the peripheral chain.
+    /// @dev acts upon data received by the peripheral chain in the pool, to the be processed on the central chain by the {markNewPoolPairComplete} function
+    /// @param firstChainAsset the address of the central chain's asset that comprises half of the pool
+    /// @param thisChainAsset the address of the central chain's asset that comprises half of the pool
+    /// @param thisChainAssetAmount the amount of this chain's asset the pool will start with, provided by user who calls this function
+    /// @param tipAmount the amount of the native coin to be swapped, with the proceeds going to the swapminer
+    /// @return true returns status of the delegatecall
+    /// Emits a {NewPair} event
     function finishPoolPair(
         address firstChainAsset,
         address thisChainAsset,
         uint thisChainAssetAmount,
-        uint128 sentTipAmount
+        uint128 tipAmount
     ) public payable returns (bool) {
         (bool success, ) = finishPoolPairContract.delegatecall(msg.data);
 
         return success;
     }
 
+    /// @notice Provides liquidity to a pool and credits the provider
+    /// @dev Provides liquidity to the pool on behalf of the address that invokes the function, and sends LP (Liquidity Provider) tokens to that user, which can be redeemed for an amount of liquidity proportional to the amount of total total LP tokens.
+    /// @param pairID the pair ID number
+    /// @param chain1AssetAmount the amount of this chain's asset the user is providing to the pool as liquidity
+    /// @param chain1Asset the address of the central chain's asset that comprises half of the pool
+    /// @return true returns status of the delegatecall
+    /// Emits a {SingleLiq} event
     function singleSidedLiquidity(
         uint64 pairID,
         uint chain1AssetAmount,
@@ -478,6 +509,14 @@ contract OverallContract is ChainlinkClient, MorphswapStorage {
         return success;
     }
 
+    /// @notice Finishes a cross-chain swap
+    /// @dev Invoked by the {fulfillPing} function to handle the destination chain's duties with regards to a cross-chain swap. Instructs the appropriate asset pool to send tokens to the approriate address.
+    /// @param pairID the pair ID number
+    /// @param thisChainWallet the address of the recipient of the swap
+    /// @param swapRatio the ratio of the origin chain's swapped assets to the pool size
+    /// @param transactionNumber the number of the meta-transaction
+    /// @return true returns status of the delegatecall
+    /// Emits a {FinishedSwap} event
     function swapFinish(
         uint64 pairID,
         address thisChainWallet,
@@ -562,7 +601,6 @@ contract OverallContract is ChainlinkClient, MorphswapStorage {
         return success;
     }
 
-    //TODO: look into preventing exploitation of c2 liquidity being deposited before it gets acknowledged by c1
     function finishLiquidity(
         uint64 pairID,
         address thisChainAsset,

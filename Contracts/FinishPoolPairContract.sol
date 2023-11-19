@@ -15,9 +15,9 @@ contract FinishPoolPairContract is ChainlinkClient, MorphswapStorage {
         address firstChainAsset,
         address thisChainAsset,
         uint thisChainAssetAmount,
-        uint128 sentTipAmount
+        uint128 tipAmount
     ) public payable returns (bool) {
-        require(msg.value >= sentTipAmount);
+        require(msg.value >= tipAmount);
 
         require(thisChainAssetAmount > 0);
         txNumber++;
@@ -28,12 +28,12 @@ contract FinishPoolPairContract is ChainlinkClient, MorphswapStorage {
         require(poolGenesisTX.pairID != 0);
         uint _ICID = poolGenesisTX.internalStartChainID;
         require(
-            sentTipAmount >=
+            tipAmount >=
                 defaultTip *
                     eCIDToTipMultiplier[internalChainIDToChainID[_ICID]]
         );
         uint preTipAmount = mCPAArray[_ICID].balance;
-        (bool tipResult, ) = mCPAArray[_ICID].call{value: sentTipAmount}("");
+        (bool tipResult, ) = mCPAArray[_ICID].call{value: tipAmount}("");
         require(tipResult);
         iCIDToLastRTXNumber[_ICID]++;
 
@@ -44,7 +44,7 @@ contract FinishPoolPairContract is ChainlinkClient, MorphswapStorage {
             false
         );
         if (thisChainAsset == address(0)) {
-            thisChainAssetAmount = msg.value - sentTipAmount;
+            thisChainAssetAmount = msg.value - tipAmount;
             (bool sendresult, ) = address(_tcapInterface).call{
                 value: thisChainAssetAmount
             }("");
@@ -69,12 +69,8 @@ contract FinishPoolPairContract is ChainlinkClient, MorphswapStorage {
             ][thisChainAsset][firstChainAsset].isValid != true
         );
         require(
-            uint64(
-                (sentTipAmount * oneQuadrillion) /
-                    (preTipAmount + sentTipAmount)
-            ) ==
-                (sentTipAmount * oneQuadrillion) /
-                    (preTipAmount + sentTipAmount)
+            uint64((tipAmount * oneQuadrillion) / (preTipAmount + tipAmount)) ==
+                (tipAmount * oneQuadrillion) / (preTipAmount + tipAmount)
         );
         gTXNumberToTXObject[txNumber - 1] = TXObject(
             8,
@@ -86,10 +82,7 @@ contract FinishPoolPairContract is ChainlinkClient, MorphswapStorage {
             firstChainAsset,
             thisChainAsset,
             0,
-            uint64(
-                (sentTipAmount * oneQuadrillion) /
-                    (preTipAmount + sentTipAmount)
-            ),
+            uint64((tipAmount * oneQuadrillion) / (preTipAmount + tipAmount)),
             iCIDToLastRTXNumber[_ICID] - 1,
             false
         );
@@ -120,7 +113,7 @@ contract FinishPoolPairContract is ChainlinkClient, MorphswapStorage {
             txNumber - 1,
             firstChainAsset,
             _ICID,
-            sentTipAmount,
+            tipAmount,
             preTipAmount,
             uint256(MethodIDs.FinishNewPair)
         );
