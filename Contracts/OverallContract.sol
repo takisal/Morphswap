@@ -843,6 +843,14 @@ contract OverallContract is ChainlinkClient, MorphswapStorage {
         pingContract.delegatecall(msg.data);
     }
 
+    //==================================================================
+    //
+    //
+    //Governance Functions
+    //
+    //
+    //==================================================================
+
     /// @notice Creates a new proposal. Requires over 2% of total governance token supply.
     /// @dev Called to create a new proposal. Will revert if user stakes less than 2% of total governance token supply; this is to prevent spamming.
     /// @param proposalType the type of the proposal
