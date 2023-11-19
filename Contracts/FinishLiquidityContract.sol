@@ -16,16 +16,16 @@ contract FinishLiquidityContract is ChainlinkClient, MorphswapStorage {
         address thisChainAsset,
         uint thisChainAssetAmount,
         address otherChainWallet,
-        uint128 sentTipAmount
+        uint128 tipAmount
     ) public payable returns (bool) {
         require(thisChainAssetAmount > 0, "Amount cannot be zero");
         require(
-            sentTipAmount >=
+            tipAmount >=
                 defaultTip * eCIDToTipMultiplier[idToPair[pairID].otherChain],
             "Declared tip must be equal or more than default tip"
         );
         require(
-            msg.value >= sentTipAmount,
+            msg.value >= tipAmount,
             "Message value must be equal to or more than declared tip"
         );
         require(
@@ -48,16 +48,16 @@ contract FinishLiquidityContract is ChainlinkClient, MorphswapStorage {
         pairIDWaitingForLiqFromTCWallet[container.pairID][msg.sender] = false;
         container.totalValue = msg.value;
         uint preTipAmount = mCPAArray[container._ICID].balance;
-        (bool tipResult, ) = mCPAArray[container._ICID].call{
-            value: sentTipAmount
-        }("");
+        (bool tipResult, ) = mCPAArray[container._ICID].call{value: tipAmount}(
+            ""
+        );
         require(tipResult);
         if (thisChainAsset == address(0)) {
             (bool sentResult, ) = idToPair[container.pairID].thisChainPool.call{
-                value: container.totalValue - sentTipAmount
+                value: container.totalValue - tipAmount
             }("");
             require(sentResult);
-            thisChainAssetAmount = container.totalValue - sentTipAmount;
+            thisChainAssetAmount = container.totalValue - tipAmount;
         } else {
             require(
                 IERC20(thisChainAsset).transferFrom(
@@ -74,8 +74,8 @@ contract FinishLiquidityContract is ChainlinkClient, MorphswapStorage {
         uint ratioRecord = (addedLP * oneQuadrillion) / oldLPAmount;
         container.ratioSend = uint64(ratioRecord);
         require(container.ratioSend == ratioRecord);
-        uint tipRatioRecord = (sentTipAmount * oneQuadrillion) /
-            (preTipAmount + sentTipAmount);
+        uint tipRatioRecord = (tipAmount * oneQuadrillion) /
+            (preTipAmount + tipAmount);
         container.tipRatioSend = uint64(tipRatioRecord);
         require(container.tipRatioSend == tipRatioRecord);
 
