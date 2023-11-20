@@ -34,15 +34,15 @@ contract AddSupportedChainsContract is ChainlinkClient, MorphswapStorage {
         mCPAArray.push(
             address(new AssetPool(address(0), nativecoinpoolid, true))
         );
-        idToPair[nativecoinpoolid] = PoolPair(
-            address(0),
-            mCPAArray[supportedChainsList.length],
-            _schain,
-            uint8(supportedChainsList.length),
-            address(0),
-            nativecoinpoolid,
-            true
-        );
+        idToPair[nativecoinpoolid] = PoolPair({
+            thisChainAsset: address(0),
+            thisChainPool: mCPAArray[supportedChainsList.length],
+            otherChain: _schain,
+            iCID: uint8(supportedChainsList.length),
+            otherChainAsset: address(0),
+            pairID: nativecoinpoolid,
+            isValid: true
+        });
         iCIDTomCPAArray[supportedChainsList.length] = mCPAArray[
             supportedChainsList.length
         ];
@@ -54,15 +54,15 @@ contract AddSupportedChainsContract is ChainlinkClient, MorphswapStorage {
         alternateTipArray.push(
             address(new AssetPool(_morphswapTokenAddress, alttippoolid, true))
         );
-        idToPair[alttippoolid] = PoolPair(
-            _morphswapTokenAddress,
-            alternateTipArray[supportedChainsList.length],
-            _schain,
-            uint8(supportedChainsList.length),
-            otherchainmorphswap,
-            alttippoolid,
-            true
-        );
+        idToPair[alttippoolid] = PoolPair({
+            thisChainAsset: _morphswapTokenAddress,
+            thisChainPool: alternateTipArray[supportedChainsList.length],
+            otherChain: _schain,
+            iCID: uint8(supportedChainsList.length),
+            otherChainAsset: otherchainmorphswap,
+            pairID: alttippoolid,
+            isValid: true
+        });
         iCIDToAltNcpa[supportedChainsList.length] = alternateTipArray[
             supportedChainsList.length
         ];

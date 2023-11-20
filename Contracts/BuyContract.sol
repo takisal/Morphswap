@@ -193,18 +193,18 @@ contract BuyContract is ChainlinkClient, MorphswapStorage {
                 .number;
             //tip amount is divided by 3 for ease of computation when tx is recieved by mid-point chain
             //event MultiChainBuy(uint indexed otherchainidnum, uint indexed pairidnum, uint32 internalfinalchainnum, uint finalpairnum, uint sa
-            emit MultiChainBuy(
-                idToPair[container.pairID].otherChain,
-                container.pairID,
-                uint32(container.secondPairID % 1000),
-                container.secondPairID,
-                endSaleAmount - (referralBonus * _fee),
-                container.preTransferBalance,
-                container.chain2Wallet,
-                txNumber - 1,
-                container.tipAmount,
-                1
-            );
+            emit MultiChainBuy({
+                otherChainIdNumber: idToPair[container.pairID].otherChain,
+                pairIdNum: container.pairID,
+                internalFinalChainNumber: uint32(container.secondPairID % 1000),
+                finalPairNumber: container.secondPairID,
+                saleAmount: endSaleAmount - (referralBonus * _fee),
+                poolBalance: container.preTransferBalance,
+                chain2Wallet: container.chain2Wallet,
+                transactionNumber: txNumber - 1,
+                tipAmountQuad: container.tipAmount,
+                methodID: MethodIDs.Buy
+            });
         } else {
             gTXNumberToTXObject[txNumber - 1] = TXObject(
                 1,
@@ -231,17 +231,17 @@ contract BuyContract is ChainlinkClient, MorphswapStorage {
                 txNumber - 1
             ];
             rTXToBlockNumber[cur_rtxnum] = block.number;
-            emit Buy(
-                idToPair[container.pairID].otherChain,
-                container.pairID,
-                endSaleAmount - (referralBonus * _fee),
-                container.preTransferBalance,
-                container.chain2Wallet,
-                txNumber - 1,
-                container.tipAmount,
-                container.preTipAmount,
-                1
-            );
+            emit Buy({
+                otherChainIdNum: idToPair[container.pairID].otherChain,
+                pairIdNum: container.pairID,
+                saleAmount: endSaleAmount - (referralBonus * _fee),
+                poolBalance: container.preTransferBalance,
+                chain2Wallet: container.chain2Wallet,
+                transactionNumber: txNumber - 1,
+                tipAmount: container.tipAmount,
+                preTipAmount: container.preTipAmount,
+                methodID: MethodIDs.Buy
+            });
         }
 
         if (oldUser[msg.sender] == false) {
