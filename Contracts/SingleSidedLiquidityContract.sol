@@ -50,7 +50,7 @@ contract SingleSidedLiquidityContract is ChainlinkClient, MorphswapStorage {
             addedLP,
             oldLPTs,
             block.number,
-            4
+            uint256(MethodIDs.SingleSidedLiquidity)
         );
         return true;
     }

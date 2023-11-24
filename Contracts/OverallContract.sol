@@ -586,7 +586,12 @@ contract OverallContract is ChainlinkClient, MorphswapStorage {
             payable(idToPair[pairID].thisChainPool)
         );
         require(chain1AssetPool.sendToUser(swapRatio, thisChainWallet));
-        emit FinishedSwap(pairID, transactionNumber, thisChainWallet, 5);
+        emit FinishedSwap(
+            pairID,
+            transactionNumber,
+            thisChainWallet,
+            uint256(MethodIDs.Swapped)
+        );
         return true;
     }
 

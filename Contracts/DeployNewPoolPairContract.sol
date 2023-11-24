@@ -147,7 +147,7 @@ contract DeployNewPoolPairContract is ChainlinkClient, MorphswapStorage {
             container.chain2Wallet,
             txNumber - 1,
             pairTracker,
-            2
+            uint256(MethodIDs.NewPair)
         );
 
         return (chain1PoolAddress, container.convertedPairID);
