@@ -29,7 +29,9 @@ contract OverallContract is ChainlinkClient, MorphswapStorage {
         }
         chainID = id;
         uint chain_id = id;
+        chainlinkFee = _chainlinkFee;
 
+        _swapminingFee = (_chainlinkFee * 11) / 10;
         _fee = 30;
         _referralBonusMultiplier = 10;
         _admin = msg.sender;
@@ -54,8 +56,6 @@ contract OverallContract is ChainlinkClient, MorphswapStorage {
 
         priceFeed = AggregatorV3Interface(_chainlinkToNativeCoinAddress);
         //chainlinkFee should be in the form of no decimals (eg 100000000000000000 instead of 0.1)
-        chainlinkFee = _chainlinkFee;
-        _swapminingFee = (_chainlinkFee * 11) / 10;
 
         //atlernatetip is divided by 2, so a value of 3 is effectively 150%
         alternateTipMultiplier = 3;
@@ -72,7 +72,7 @@ contract OverallContract is ChainlinkClient, MorphswapStorage {
         }
     }
 
-    function initializeDekegates(
+    function initializeDelegates(
         address _testingContract,
         address _buyContract,
         address _buyWithNativeCoinContract,
@@ -104,219 +104,6 @@ contract OverallContract is ChainlinkClient, MorphswapStorage {
         pingContract = _pingContract;
         singleSidedLiquidityContract = _singleSidedLiquidityContract;
         cancelManualEscrowContract = _cancelManualEscrowContract;
-    }
-
-    //================================================================================
-    //
-    //
-    //Administrative functions
-    //
-    //
-    //================================================================================
-    function changeContractAddress(uint cn, address ca) public {
-        require(msg.sender == _admin);
-        testingContract.delegatecall(msg.data);
-    }
-
-    function greenLightAddress(uint8 _icid, address gla) public returns (bool) {
-        greenlitICIDToAddressMap[_icid][gla] = msg.sender;
-    }
-
-    function getPoolAmount(uint64 pID) public view returns (uint) {
-        if (
-            idToPair[pID].thisChainAsset == address(0) && idToPair[pID].isValid
-        ) {
-            return idToPair[pID].thisChainPool.balance;
-        } else {
-            return (
-                IERC20(idToPair[pID].thisChainAsset).balanceOf(
-                    idToPair[pID].thisChainPool
-                )
-            );
-        }
-    }
-
-    function withdrawAsset(
-        bool isCoin,
-        address ercAddress,
-        uint amountToWithdraw
-    ) public returns (bool) {
-        require(msg.sender == _admin);
-
-        if (isCoin) {
-            (bool sent, ) = msg.sender.call{value: address(this).balance}("");
-            require(sent);
-        } else {
-            IERC20 ercToken = IERC20(ercAddress);
-            require(
-                ercToken.transfer(msg.sender, amountToWithdraw),
-                "Failed to send asset"
-            );
-        }
-        return true;
-    }
-
-    function changeJIDalt(string memory altjid) public returns (bool) {
-        require(msg.sender == _admin);
-        jidAlt = bytes32(bytes(altjid));
-        return true;
-    }
-
-    function changeTMRReq(string memory tMR) public returns (bool) {
-        require(msg.sender == _admin);
-        tMRReq = bytes32(bytes(tMR));
-        return true;
-    }
-
-    function settipmults(uint eCID, uint tipMultiplier) public returns (bool) {
-        require(msg.sender == _admin);
-        eCIDToTipMultiplier[eCID] = tipMultiplier;
-        return true;
-    }
-
-    function changeAltMult(uint _altmult) public returns (bool) {
-        require(msg.sender == _admin);
-        alternateTipMultiplier = _altmult;
-        return true;
-    }
-
-    function addAltNCPools(
-        uint _ICID,
-        address altNCPoolAddress
-    ) public returns (bool) {
-        require(msg.sender == _admin);
-        iCIDToAltNCPA[_ICID] = altNCPoolAddress;
-        return true;
-    }
-
-    function changeCLtoken(address chainlinkAddress) public returns (bool) {
-        require(msg.sender == _admin);
-        setChainlinkToken(chainlinkAddress);
-        return true;
-    }
-
-    function changeCLtoNC(address cLToNCAddress) public returns (bool) {
-        require(msg.sender == _admin);
-        priceFeed = AggregatorV3Interface(cLToNCAddress);
-        return true;
-    }
-
-    function changeAlternatetoNC(address altToNCAddress) public returns (bool) {
-        require(msg.sender == _admin);
-        priceFeedAlternate = AggregatorV3Interface(altToNCAddress);
-        return true;
-    }
-
-    function changeSupportedChainCLfee(
-        uint _ICID,
-        uint fee
-    ) public returns (bool) {
-        require(msg.sender == _admin);
-        chainlinkFeeArray[_ICID] = fee;
-        return true;
-    }
-
-    function changeOracle(address oracleAddress) public returns (bool) {
-        require(msg.sender == _admin);
-        setChainlinkOracle(oracleAddress);
-        return true;
-    }
-
-    function changeCLfee(uint newFee) public returns (bool) {
-        require(msg.sender == _admin);
-        chainlinkFee = newFee;
-        _swapminingFee = (newFee * 11) / 10;
-        return true;
-    }
-
-    function changeSMfee(uint newFee) public returns (bool) {
-        require(msg.sender == _admin);
-        _swapminingFee = newFee;
-        chainlinkFee = (newFee * 10) / 11;
-        return true;
-    }
-
-    function setAdmin(address newAdmin) public returns (bool) {
-        require(msg.sender == _admin);
-        _admin = newAdmin;
-        return true;
-    }
-
-    function setDefaultTipMultiplier(
-        uint128 newTipMultiplier
-    ) public returns (bool) {
-        require(msg.sender == _admin);
-        defaultTipMultiplier = newTipMultiplier;
-        return true;
-    }
-
-    function setOracleAddress(address newOracle) public returns (bool) {
-        require(msg.sender == _admin);
-        _oracle = newOracle;
-        return true;
-    }
-
-    function addSupportedChains(
-        uint supportedChain,
-        string memory jobID,
-        address otherChainMorphswap
-    ) public returns (bool) {
-        (bool success, ) = addSupportedChainsContract.delegatecall(msg.data);
-
-        return success;
-    }
-
-    function setVotingTime(uint newProposalLifespan) public returns (bool) {
-        require(msg.sender == _admin);
-        _proposalLifespan = newProposalLifespan;
-        return true;
-    }
-
-    function EMERGENCYsetlastIndexforChain(
-        uint8 _ICID,
-        uint128 newProcessNumber
-    ) public returns (bool) {
-        require(msg.sender == _admin);
-        iCIDToLastRTXNumber[_ICID] = newProcessNumber;
-        return true;
-    }
-
-    function EMERGENCYsetlastProcessedforChain(
-        uint8 _ICID,
-        uint128 newProcessNumber
-    ) public returns (bool) {
-        require(msg.sender == _admin);
-        iCIDToNumberOfTXsProcessed[_ICID] = newProcessNumber;
-        return true;
-    }
-
-    function setReferrer(address _referrer) public returns (bool) {
-        require(referredToReferrer[msg.sender] == address(0));
-        require(oldUser[_referrer]);
-        require(false);
-        referredToReferrer[msg.sender] = _referrer;
-        referrerToReferred[_referrer].push(msg.sender);
-        return true;
-    }
-
-    function changeJobId(
-        uint8 _ICID,
-        string memory jobID
-    ) public returns (bool) {
-        require(msg.sender == _admin);
-        iCIDToJID[_ICID] = bytes32(bytes(jobID));
-        return true;
-    }
-
-    function updateTipMultReq() public returns (bool) {
-        Chainlink.Request memory req = buildChainlinkRequest(
-            tMRReq,
-            address(this),
-            this.fulfillTipmult.selector
-        );
-
-        sendOperatorRequest(req, chainlinkFee);
-        return true;
     }
 
     /// @notice Queries a meta-transaction by it's RTX number
@@ -928,6 +715,219 @@ contract OverallContract is ChainlinkClient, MorphswapStorage {
             }
         }
         return currentBallot;
+    }
+
+    //================================================================================
+    //
+    //
+    //Administrative functions
+    //
+    //
+    //================================================================================
+    function changeContractAddress(uint cn, address ca) public {
+        require(msg.sender == _admin);
+        testingContract.delegatecall(msg.data);
+    }
+
+    function greenLightAddress(uint8 _icid, address gla) public returns (bool) {
+        greenlitICIDToAddressMap[_icid][gla] = msg.sender;
+    }
+
+    function getPoolAmount(uint64 pID) public view returns (uint) {
+        if (
+            idToPair[pID].thisChainAsset == address(0) && idToPair[pID].isValid
+        ) {
+            return idToPair[pID].thisChainPool.balance;
+        } else {
+            return (
+                IERC20(idToPair[pID].thisChainAsset).balanceOf(
+                    idToPair[pID].thisChainPool
+                )
+            );
+        }
+    }
+
+    function withdrawAsset(
+        bool isCoin,
+        address ercAddress,
+        uint amountToWithdraw
+    ) public returns (bool) {
+        require(msg.sender == _admin);
+
+        if (isCoin) {
+            (bool sent, ) = msg.sender.call{value: address(this).balance}("");
+            require(sent);
+        } else {
+            IERC20 ercToken = IERC20(ercAddress);
+            require(
+                ercToken.transfer(msg.sender, amountToWithdraw),
+                "Failed to send asset"
+            );
+        }
+        return true;
+    }
+
+    function changeJIDalt(string memory altjid) public returns (bool) {
+        require(msg.sender == _admin);
+        jidAlt = bytes32(bytes(altjid));
+        return true;
+    }
+
+    function changeTMRReq(string memory tMR) public returns (bool) {
+        require(msg.sender == _admin);
+        tMRReq = bytes32(bytes(tMR));
+        return true;
+    }
+
+    function settipmults(uint eCID, uint tipMultiplier) public returns (bool) {
+        require(msg.sender == _admin);
+        eCIDToTipMultiplier[eCID] = tipMultiplier;
+        return true;
+    }
+
+    function changeAltMult(uint _altmult) public returns (bool) {
+        require(msg.sender == _admin);
+        alternateTipMultiplier = _altmult;
+        return true;
+    }
+
+    function addAltNCPools(
+        uint _ICID,
+        address altNCPoolAddress
+    ) public returns (bool) {
+        require(msg.sender == _admin);
+        iCIDToAltNCPA[_ICID] = altNCPoolAddress;
+        return true;
+    }
+
+    function changeCLtoken(address chainlinkAddress) public returns (bool) {
+        require(msg.sender == _admin);
+        setChainlinkToken(chainlinkAddress);
+        return true;
+    }
+
+    function changeCLtoNC(address cLToNCAddress) public returns (bool) {
+        require(msg.sender == _admin);
+        priceFeed = AggregatorV3Interface(cLToNCAddress);
+        return true;
+    }
+
+    function changeAlternatetoNC(address altToNCAddress) public returns (bool) {
+        require(msg.sender == _admin);
+        priceFeedAlternate = AggregatorV3Interface(altToNCAddress);
+        return true;
+    }
+
+    function changeSupportedChainCLfee(
+        uint _ICID,
+        uint fee
+    ) public returns (bool) {
+        require(msg.sender == _admin);
+        chainlinkFeeArray[_ICID] = fee;
+        return true;
+    }
+
+    function changeOracle(address oracleAddress) public returns (bool) {
+        require(msg.sender == _admin);
+        setChainlinkOracle(oracleAddress);
+        return true;
+    }
+
+    function changeCLfee(uint newFee) public returns (bool) {
+        require(msg.sender == _admin);
+        chainlinkFee = newFee;
+        _swapminingFee = (newFee * 11) / 10;
+        return true;
+    }
+
+    function changeSMfee(uint newFee) public returns (bool) {
+        require(msg.sender == _admin);
+        _swapminingFee = newFee;
+        chainlinkFee = (newFee * 10) / 11;
+        return true;
+    }
+
+    function setAdmin(address newAdmin) public returns (bool) {
+        require(msg.sender == _admin);
+        _admin = newAdmin;
+        return true;
+    }
+
+    function setDefaultTipMultiplier(
+        uint128 newTipMultiplier
+    ) public returns (bool) {
+        require(msg.sender == _admin);
+        defaultTipMultiplier = newTipMultiplier;
+        return true;
+    }
+
+    function setOracleAddress(address newOracle) public returns (bool) {
+        require(msg.sender == _admin);
+        _oracle = newOracle;
+        return true;
+    }
+
+    function addSupportedChains(
+        uint supportedChain,
+        string memory jobID,
+        address otherChainMorphswap
+    ) public returns (bool) {
+        (bool success, ) = addSupportedChainsContract.delegatecall(msg.data);
+
+        return success;
+    }
+
+    function setVotingTime(uint newProposalLifespan) public returns (bool) {
+        require(msg.sender == _admin);
+        _proposalLifespan = newProposalLifespan;
+        return true;
+    }
+
+    function EMERGENCYsetlastIndexforChain(
+        uint8 _ICID,
+        uint128 newProcessNumber
+    ) public returns (bool) {
+        require(msg.sender == _admin);
+        iCIDToLastRTXNumber[_ICID] = newProcessNumber;
+        return true;
+    }
+
+    function EMERGENCYsetlastProcessedforChain(
+        uint8 _ICID,
+        uint128 newProcessNumber
+    ) public returns (bool) {
+        require(msg.sender == _admin);
+        iCIDToNumberOfTXsProcessed[_ICID] = newProcessNumber;
+        return true;
+    }
+
+    function setReferrer(address _referrer) public returns (bool) {
+        require(referredToReferrer[msg.sender] == address(0));
+        require(oldUser[_referrer]);
+        require(false);
+        referredToReferrer[msg.sender] = _referrer;
+        referrerToReferred[_referrer].push(msg.sender);
+        return true;
+    }
+
+    function changeJobId(
+        uint8 _ICID,
+        string memory jobID
+    ) public returns (bool) {
+        require(msg.sender == _admin);
+        iCIDToJID[_ICID] = bytes32(bytes(jobID));
+        return true;
+    }
+
+    function updateTipMultReq() public returns (bool) {
+        Chainlink.Request memory req = buildChainlinkRequest(
+            tMRReq,
+            address(this),
+            this.fulfillTipmult.selector
+        );
+
+        sendOperatorRequest(req, chainlinkFee);
+        return true;
     }
 
     fallback() external payable {}
