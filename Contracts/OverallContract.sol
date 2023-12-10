@@ -29,6 +29,7 @@ contract OverallContract is ChainlinkClient, MorphswapStorage {
         }
         chainID = id;
         uint chain_id = id;
+        //chainlinkFee should be in the form of no decimals (eg 100000000000000000 instead of 0.1)
         chainlinkFee = _chainlinkFee;
 
         _swapminingFee = (_chainlinkFee * 11) / 10;
@@ -42,7 +43,6 @@ contract OverallContract is ChainlinkClient, MorphswapStorage {
 
         txNumber = 0;
         pairTracker = 0;
-        oneQuadrillion = 10 ** 15;
         defaultTipMultiplier = 2;
         defaultTipAlternate = 100000 ether;
 
@@ -55,7 +55,6 @@ contract OverallContract is ChainlinkClient, MorphswapStorage {
         chainIDToInternalChainID[chain_id] = internalChainID;
 
         priceFeed = AggregatorV3Interface(_chainlinkToNativeCoinAddress);
-        //chainlinkFee should be in the form of no decimals (eg 100000000000000000 instead of 0.1)
 
         //atlernatetip is divided by 2, so a value of 3 is effectively 150%
         alternateTipMultiplier = 3;

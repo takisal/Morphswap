@@ -8,6 +8,7 @@ import "@chainlink/contracts/src/v0.8/ChainlinkClient.sol";
 import "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
 
 contract MorphswapStorage {
+    //Events
     event Buy(
         uint indexed otherChainIdNum,
         uint indexed pairIdNum,
@@ -130,37 +131,7 @@ contract MorphswapStorage {
     event RequestMultipleFulfilled(bytes32 indexed requestId);
     event Failed(uint8 indexed icId, uint indexed rtxNumber);
     event CancelledEscrow(uint indexed pairid, address tcw);
-
-    struct StackTooDeepAvoider2 {
-        uint64 pairID;
-        address otherChainWallet;
-        address thisChainPool;
-        uint otherChain;
-        uint _ICID;
-        uint totalValue;
-        uint128 sentTipam;
-        uint64 tipRatioSend;
-        uint128 currentRTXNumber;
-        uint64 ratioSend;
-    }
-
-    struct StackTooDeepAvoider1 {
-        uint64 pairID;
-        uint preTransferBalance;
-        uint preTipAmount;
-        uint tipAmount;
-        address chain2Wallet;
-        uint64 secondPairID;
-        uint _ICID;
-        bool alternateFee;
-        bool multiChainHop;
-        uint chain1AssetAmount;
-        address chain1Asset;
-        uint chain2;
-        address chain2Asset;
-        uint128 rTXNumber;
-        uint64 convertedPairID;
-    }
+    //Structs
     struct PoolPair {
         address thisChainAsset;
         address thisChainPool;
@@ -195,6 +166,36 @@ contract MorphswapStorage {
         uint128 rtxNumber;
         bool alternateFee;
     }
+    //-Compiler structs
+    struct StackTooDeepAvoider1 {
+        uint64 pairID;
+        uint preTransferBalance;
+        uint preTipAmount;
+        uint tipAmount;
+        address chain2Wallet;
+        uint64 secondPairID;
+        uint _ICID;
+        bool alternateFee;
+        bool multiChainHop;
+        uint chain1AssetAmount;
+        address chain1Asset;
+        uint chain2;
+        address chain2Asset;
+        uint128 rTXNumber;
+        uint64 convertedPairID;
+    }
+    struct StackTooDeepAvoider2 {
+        uint64 pairID;
+        address otherChainWallet;
+        address thisChainPool;
+        uint otherChain;
+        uint _ICID;
+        uint totalValue;
+        uint128 sentTipam;
+        uint64 tipRatioSend;
+        uint128 currentRTXNumber;
+        uint64 ratioSend;
+    }
     struct StackTooDeepAvoider3 {
         bytes32 _requestId;
         uint8 methodID;
@@ -212,36 +213,50 @@ contract MorphswapStorage {
         bytes20 swapminer;
     }
 
-    address _admin;
-    address _oracle;
-    uint txNumber;
-    uint64 pairTracker;
-    uint public chainID;
-    uint128 public defaultTip;
-    uint public defaultTipAlternate;
-    uint8 public internalChainID;
-    uint128 defaultTipMultiplier;
-    bool centralContract;
-    uint _fee;
-    uint _referralBonusMultiplier;
+    //Configuration variables
+    //-Interfaces
     IERC20 _morphswapToken;
-    address _morphswapTokenAddress;
-    uint _proposalLifespan;
-    uint chainlinkFee;
-    address chainlinkAddress;
-    uint _swapminingFee;
-    uint64 oneQuadrillion;
-    uint chainlinkPrice;
-    bytes32 jidAlt;
-    bytes32 tMRReq;
-    AggregatorV3Interface internal priceFeed;
-    AggregatorV3Interface internal priceFeedAlternate;
+    //-Booleans
     bool _alternateFeeActive;
     bool _alternatePriceFeed;
     bool _alternateJobID;
-    uint alternateTipMultiplier;
-    uint public errorCount;
+    //-Numbers
+    //--Unsigned integers
+    //---256-bit unsigned integers
+    uint256 _fee;
+    uint256 _referralBonusMultiplier;
+    uint256 _proposalLifespan;
+    uint256 _swapminingFee;
+    //-Addresses
+    address _admin;
+    address _oracle;
+    address _morphswapTokenAddress;
 
+    //Standard state variables
+    AggregatorV3Interface internal priceFeed;
+    AggregatorV3Interface internal priceFeedAlternate;
+
+    //-Numbers
+    //--Unsigned integers
+    //---64-bit unsigned integers
+    uint64 pairTracker;
+    //---128-bit unsigned integers
+    uint128 defaultTipMultiplier;
+    //---256-bit unsigned integers
+    uint256 txNumber;
+    uint256 alternateTipMultiplier;
+    uint256 chainlinkPrice;
+    uint256 chainlinkFee;
+    //-Bytes
+    //--32-bit bytes
+    bytes32 jidAlt;
+    bytes32 tMRReq;
+    //-Booleans
+    bool centralContract;
+    //-Addresses
+    address chainlinkAddress;
+
+    //Delegate contract addresses
     address testingContract;
     address buyContract;
     address buyWithNativeCoinContract;
@@ -258,6 +273,7 @@ contract MorphswapStorage {
     address cancelManualEscrowContract;
     address pingContract;
 
+    //Mappings
     mapping(uint => uint) public eCIDToTipMultiplier;
     mapping(address => address[]) public referrerToReferred;
     mapping(uint => address) iCIDToMCPAArray;
@@ -289,6 +305,7 @@ contract MorphswapStorage {
     mapping(uint128 => uint) rTXToBlockNumber;
     mapping(uint => address) iCIDToAltNCPA;
 
+    //Enums
     enum MethodIDs {
         Empty,
         Buy,
@@ -301,9 +318,24 @@ contract MorphswapStorage {
         FinishNewPair,
         RemoveDoubleLiquidity
     }
+    //Arrays
+    //-Address arrays
+    address[] alternateTipArray;
     address[] mCPAArray;
+    //-256-bit unsigned integer arrays
     uint[] supportedChainsList;
     uint[] chainlinkFeeArray;
-    address[] alternateTipArray;
+    //-Struct arrays
     Proposal[] public _ballot;
+
+    //Constants
+    //-64-bit unsigned integers
+    uint64 constant oneQuadrillion = 1000000000000000;
+
+    //Public variables
+    uint8 public internalChainID;
+    uint128 public defaultTip;
+    uint256 public defaultTipAlternate;
+    uint256 public errorCount;
+    uint256 public chainID;
 }
