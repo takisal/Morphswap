@@ -121,7 +121,6 @@ type ReceiptFullStruct struct {
 }
 
 func init() {
-
 	//initialize maps
 	cNIDToPublicKeys = make(map[uint][]string)
 	ipToCNID = make(map[string]uint8)
